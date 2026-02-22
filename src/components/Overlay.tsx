@@ -10,9 +10,23 @@ export default function Overlay({
   subtitle = 'Guillaume HARARI',
 }: OverlayProps) {
   const [isMobile, setIsMobile] = useState(false);
+  const [touring, setTouring] = useState(false);
 
   useEffect(() => {
     setIsMobile('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  }, []);
+
+  useEffect(() => {
+    const onStart = () => setTouring(true);
+    const onEnd = () => setTouring(false);
+    window.addEventListener('startGuidedTour', onStart);
+    window.addEventListener('guidedTourEnd', onEnd);
+    window.addEventListener('stopGuidedTour', onEnd);
+    return () => {
+      window.removeEventListener('startGuidedTour', onStart);
+      window.removeEventListener('guidedTourEnd', onEnd);
+      window.removeEventListener('stopGuidedTour', onEnd);
+    };
   }, []);
 
   const onWalkStart = useCallback(() => {
@@ -61,7 +75,7 @@ export default function Overlay({
         <p>{subtitle}</p>
       </div>
 
-      {isMobile && (
+      {isMobile && !touring && (
         <div className="walk-btns">
           <button
             className="walk-btn walk-btn-up"
