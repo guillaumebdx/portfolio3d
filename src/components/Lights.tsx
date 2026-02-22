@@ -1,5 +1,5 @@
 // Ceiling lights along the corridor — like track lighting
-const CEILING_LIGHTS_Z = [-8, -5, -2, 1, 4, 7];
+const CEILING_LIGHTS_Z = [-9, -6, -3, 0, 3, 6, 9];
 
 export default function Lights() {
   return (
@@ -25,6 +25,15 @@ export default function Lights() {
           decay={1.5}
         />
       ))}
+
+      {/* Back door accent light */}
+      <pointLight
+        position={[0, 3.5, -10]}
+        intensity={3}
+        color="#ffe0b0"
+        distance={6}
+        decay={1.5}
+      />
     </>
   );
 }

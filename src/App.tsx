@@ -2,6 +2,7 @@ import './App.css'
 import Scene from './components/Scene'
 import Overlay from './components/Overlay'
 import CompletionModal from './components/CompletionModal'
+import Loader from './components/Loader'
 
 function App() {
   return (
@@ -9,6 +10,7 @@ function App() {
       <Scene />
       <Overlay title="Portfolio" subtitle="Guillaume HARARI" />
       <CompletionModal />
+      <Loader />
     </div>
   )
 }

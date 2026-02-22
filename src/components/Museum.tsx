@@ -121,6 +121,12 @@ export default function Museum({ modelPath }: MuseumProps) {
     });
 
     setPaintings(found);
+
+    // Signal that the scene is fully ready (meshes processed, textures loading)
+    // Small delay to let textures start rendering
+    setTimeout(() => {
+      window.dispatchEvent(new Event('sceneReady'));
+    }, 500);
   }, [scene]);
 
   const [visited, setVisited] = useState<Set<number>>(new Set());
@@ -221,29 +227,36 @@ function PaintingFrame({ painting }: { painting: PaintingInfo }) {
   // Rotation to face outward (same as placard)
   const rotY = Math.atan2(normal[0], normal[2]);
 
-  // Frame dimensions
-  const frameDepth = 0.04;
-  const innerBorderWidth = 0.03;
-  const outerBorderWidth = 0.05;
+  // Thick frame dimensions like reference image
+  const frameDepth = 0.06;
+  const outerBorder = 0.12;      // Thick dark brown outer
+  const goldStripe = 0.08;       // Gold accent stripe
+  const innerBorder = 0.04;      // Inner dark edge
 
   return (
     <group position={framePos} rotation={[0, rotY, 0]}>
-      {/* Outer frame - warm brown wood (furthest back) */}
-      <mesh position={[0, 0, -frameDepth]}>
-        <boxGeometry args={[width + outerBorderWidth * 2, height + outerBorderWidth * 2, frameDepth]} />
-        <meshStandardMaterial color="#3d2b1f" roughness={0.6} metalness={0.2} />
+      {/* Outer frame - thick dark brown wood */}
+      <mesh position={[0, 0, -frameDepth * 0.5]}>
+        <boxGeometry args={[width + outerBorder * 2, height + outerBorder * 2, frameDepth]} />
+        <meshStandardMaterial color="#2a1810" roughness={0.7} metalness={0.1} />
       </mesh>
 
-      {/* Inner frame - gold/brass accent */}
-      <mesh position={[0, 0, -frameDepth * 0.6]}>
-        <boxGeometry args={[width + innerBorderWidth * 2, height + innerBorderWidth * 2, frameDepth * 0.8]} />
-        <meshStandardMaterial color="#c9a227" roughness={0.3} metalness={0.7} />
+      {/* Gold stripe - bright accent */}
+      <mesh position={[0, 0, -frameDepth * 0.3]}>
+        <boxGeometry args={[width + goldStripe * 2, height + goldStripe * 2, frameDepth * 0.7]} />
+        <meshStandardMaterial color="#d4a84b" roughness={0.25} metalness={0.8} />
       </mesh>
 
-      {/* Inner lip - dark edge closest to painting */}
-      <mesh position={[0, 0, -0.005]}>
-        <boxGeometry args={[width + 0.015, height + 0.015, 0.01]} />
-        <meshStandardMaterial color="#2a2a2a" roughness={0.2} metalness={0.5} />
+      {/* Inner dark brown border */}
+      <mesh position={[0, 0, -frameDepth * 0.15]}>
+        <boxGeometry args={[width + innerBorder * 2, height + innerBorder * 2, frameDepth * 0.5]} />
+        <meshStandardMaterial color="#1a0f08" roughness={0.6} metalness={0.15} />
+      </mesh>
+
+      {/* Inner lip - thin dark edge closest to painting */}
+      <mesh position={[0, 0, 0.002]}>
+        <boxGeometry args={[width + 0.015, height + 0.015, 0.012]} />
+        <meshStandardMaterial color="#0a0604" roughness={0.3} metalness={0.4} />
       </mesh>
     </group>
   );

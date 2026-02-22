@@ -35,8 +35,8 @@ export default function CameraController() {
 
   // Set initial camera
   useEffect(() => {
-    camera.position.set(1, HUMAN_HEIGHT, 2);
-    camera.lookAt(0, HUMAN_HEIGHT, -10);
+    camera.position.set(0, HUMAN_HEIGHT, -12);
+    camera.lookAt(0, HUMAN_HEIGHT, 10);
     euler.current.setFromQuaternion(camera.quaternion);
   }, [camera]);
 
