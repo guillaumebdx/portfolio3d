@@ -17,7 +17,7 @@ export default function Scene() {
         alpha: false,
         powerPreference: 'high-performance',
       }}
-      dpr={[1, 2]}
+      dpr={[1, 1.5]}
     >
       <color attach="background" args={['#111115']} />
       <fog attach="fog" args={['#111115', 15, 45]} />
