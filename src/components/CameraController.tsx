@@ -28,6 +28,10 @@ export default function CameraController() {
 
   const touchLook = useRef({ active: false, lastX: 0, lastY: 0 });
 
+  // Auto-navigation to painting
+  const navTarget = useRef<{ pos: Vector3; lookAt: Vector3 } | null>(null);
+  const isNavigating = useRef(false);
+
   // Detect mobile
   useEffect(() => {
     isMobile.current = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -154,6 +158,25 @@ export default function CameraController() {
     };
   }, [camera, gl]);
 
+  // Listen for painting click navigation
+  useEffect(() => {
+    const onNavigate = (e: Event) => {
+      const { center, normal } = (e as CustomEvent).detail;
+      // Target position: 1.5m in front of painting along its normal
+      const targetPos = new Vector3(
+        center[0] + normal[0] * 1.5,
+        HUMAN_HEIGHT,
+        center[2] + normal[2] * 1.5
+      );
+      const lookAtPoint = new Vector3(center[0], HUMAN_HEIGHT, center[2]);
+      navTarget.current = { pos: targetPos, lookAt: lookAtPoint };
+      isNavigating.current = true;
+    };
+
+    window.addEventListener('navigateToPainting', onNavigate);
+    return () => window.removeEventListener('navigateToPainting', onNavigate);
+  }, []);
+
   // Collision detection: cast multiple rays at different heights
   const checkCollision = (position: Vector3, moveDir: Vector3): { blocked: boolean; normal?: Vector3 } => {
     const dir = moveDir.clone().normalize();
@@ -179,6 +202,48 @@ export default function CameraController() {
 
   // Frame loop
   useFrame((_, delta) => {
+    // Auto-navigation to painting
+    if (isNavigating.current && navTarget.current) {
+      // Cancel navigation on any user input
+      const hasInput =
+        keys.current.forward || keys.current.backward ||
+        keys.current.left || keys.current.right ||
+        moveForward.current || moveBackward.current;
+      if (hasInput) {
+        isNavigating.current = false;
+        navTarget.current = null;
+      } else {
+        const target = navTarget.current;
+        const lerpSpeed = 3 * delta;
+
+        // Smoothly move position
+        camera.position.lerp(target.pos, lerpSpeed);
+
+        // Smoothly rotate to look at painting
+        const lookDir = new Vector3().subVectors(target.lookAt, camera.position).normalize();
+        const targetYaw = Math.atan2(-lookDir.x, -lookDir.z);
+        // Lerp euler Y toward target yaw
+        let yawDiff = targetYaw - euler.current.y;
+        // Normalize angle difference to [-PI, PI]
+        while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+        while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+        euler.current.y += yawDiff * lerpSpeed;
+        // Lerp pitch toward 0 (level)
+        euler.current.x += (0 - euler.current.x) * lerpSpeed;
+        camera.quaternion.setFromEuler(euler.current);
+
+        // Check if arrived
+        const dist = camera.position.distanceTo(target.pos);
+        if (dist < 0.05 && Math.abs(yawDiff) < 0.02) {
+          isNavigating.current = false;
+          navTarget.current = null;
+        }
+
+        camera.position.y = HUMAN_HEIGHT;
+        return;
+      }
+    }
+
     const active = isLocked.current || isMobile.current;
     if (!active) return;
 

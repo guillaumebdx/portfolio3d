@@ -204,8 +204,35 @@ function PaintingExtras({
     }
   });
 
+  const handleClick = () => {
+    window.dispatchEvent(
+      new CustomEvent('navigateToPainting', {
+        detail: {
+          center: painting.center,
+          normal: painting.normal,
+        },
+      })
+    );
+  };
+
+  // Rotation to face outward
+  const rotY = Math.atan2(painting.normal[0], painting.normal[2]);
+
   return (
     <>
+      {/* Clickable hitbox in front of painting */}
+      <mesh
+        position={[
+          painting.center[0] + painting.normal[0] * 0.05,
+          painting.center[1],
+          painting.center[2] + painting.normal[2] * 0.05,
+        ]}
+        rotation={[0, rotY, 0]}
+        onClick={handleClick}
+      >
+        <planeGeometry args={[painting.width, painting.height]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
       <PaintingFrame painting={painting} />
       <PaintingSpotlight painting={painting} />
       <PaintingPlacard painting={painting} visited={visited} />
