@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import { Vector3, Raycaster, Euler } from 'three';
 
@@ -34,6 +34,20 @@ export default function CameraController() {
   const navTarget = useRef<{ pos: Vector3; lookAt: Vector3 } | null>(null);
   const isNavigating = useRef(false);
 
+  // Guided tour
+  const tourPaintings = useRef<{ center: number[]; normal: number[] }[]>([]);
+  const tourActive = useRef(false);
+  const tourIndex = useRef(0);
+  const tourPauseUntil = useRef(0);
+  const tourPhase = useRef<'approach' | 'stepback' | 'pause' | 'center'>('approach');
+
+  // Block pointer lock until mode is selected
+  const modeSelected = useRef(false);
+
+  // Dancing camera
+  const isDancing = useRef(false);
+  const danceTime = useRef(0);
+
   // Detect mobile
   useEffect(() => {
     isMobile.current = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -52,8 +66,11 @@ export default function CameraController() {
 
     const onClick = () => {
       if (isMobile.current) return;
+      if (!modeSelected.current) return;
       canvas.requestPointerLock();
     };
+
+    const onModeSelected = () => { modeSelected.current = true; };
 
     const onLockChange = () => {
       isLocked.current = document.pointerLockElement === canvas;
@@ -70,11 +87,13 @@ export default function CameraController() {
     canvas.addEventListener('click', onClick);
     document.addEventListener('pointerlockchange', onLockChange);
     document.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('modeSelected', onModeSelected);
 
     return () => {
       canvas.removeEventListener('click', onClick);
       document.removeEventListener('pointerlockchange', onLockChange);
       document.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('modeSelected', onModeSelected);
     };
   }, [camera, gl]);
 
@@ -187,9 +206,118 @@ export default function CameraController() {
       isNavigating.current = true;
     };
 
+    const onDanceStart = () => { isDancing.current = true; danceTime.current = 0; };
+    const onDanceStop = () => {
+      isDancing.current = false;
+      // Reset pitch to level
+      euler.current.x = 0;
+      camera.quaternion.setFromEuler(euler.current);
+    };
+
     window.addEventListener('navigateToPainting', onNavigate);
-    return () => window.removeEventListener('navigateToPainting', onNavigate);
+    window.addEventListener('dancingStart', onDanceStart);
+    window.addEventListener('dancingStop', onDanceStop);
+    return () => {
+      window.removeEventListener('navigateToPainting', onNavigate);
+      window.removeEventListener('dancingStart', onDanceStart);
+      window.removeEventListener('dancingStop', onDanceStop);
+    };
   }, []);
+
+  // Guided tour events
+  const navigateToTourIndex = useCallback((idx: number) => {
+    const p = tourPaintings.current[idx];
+    if (!p) return;
+    // Phase 1: approach close (1.5m) to trigger visited green
+    const targetPos = new Vector3(
+      p.center[0] + p.normal[0] * 1.5,
+      HUMAN_HEIGHT,
+      p.center[2] + p.normal[2] * 1.5
+    );
+    const lookAtPoint = new Vector3(p.center[0], HUMAN_HEIGHT, p.center[2]);
+    navTarget.current = { pos: targetPos, lookAt: lookAtPoint };
+    isNavigating.current = true;
+    tourPhase.current = 'approach';
+    tourPauseUntil.current = 0;
+  }, []);
+
+  const stepBackFromPainting = useCallback(() => {
+    const p = tourPaintings.current[tourIndex.current];
+    if (!p) return;
+    // Phase 2: step back to 3.5m so full painting is visible
+    const targetPos = new Vector3(
+      p.center[0] + p.normal[0] * 3.5,
+      HUMAN_HEIGHT,
+      p.center[2] + p.normal[2] * 3.5
+    );
+    const lookAtPoint = new Vector3(p.center[0], HUMAN_HEIGHT, p.center[2]);
+    navTarget.current = { pos: targetPos, lookAt: lookAtPoint };
+    isNavigating.current = true;
+    tourPhase.current = 'stepback';
+  }, []);
+
+  useEffect(() => {
+    const onPaintingsReady = (e: Event) => {
+      tourPaintings.current = (e as CustomEvent).detail;
+    };
+    const onStartTour = () => {
+      if (tourPaintings.current.length === 0) return;
+      // Reorder paintings in snake pattern: reverse alternate wall groups
+      // so we always start from the nearest painting when switching walls
+      const paintings = [...tourPaintings.current];
+      const groups: { start: number; end: number }[] = [];
+      let groupStart = 0;
+      for (let i = 1; i <= paintings.length; i++) {
+        const prev = paintings[i - 1];
+        const curr = paintings[i];
+        const sameWall = curr &&
+          Math.abs(prev.normal[0] - curr.normal[0]) < 0.1 &&
+          Math.abs(prev.normal[2] - curr.normal[2]) < 0.1;
+        if (!sameWall) {
+          groups.push({ start: groupStart, end: i - 1 });
+          groupStart = i;
+        }
+      }
+      // For each group after the first, check if reversing is shorter
+      for (let g = 1; g < groups.length; g++) {
+        const prevLast = paintings[groups[g - 1].end];
+        const { start, end } = groups[g];
+        const first = paintings[start];
+        const last = paintings[end];
+        const distToFirst =
+          Math.pow(prevLast.center[0] - first.center[0], 2) +
+          Math.pow(prevLast.center[2] - first.center[2], 2);
+        const distToLast =
+          Math.pow(prevLast.center[0] - last.center[0], 2) +
+          Math.pow(prevLast.center[2] - last.center[2], 2);
+        if (distToLast < distToFirst) {
+          // Reverse this wall group
+          const segment = paintings.slice(start, end + 1).reverse();
+          for (let i = 0; i < segment.length; i++) {
+            paintings[start + i] = segment[i];
+          }
+        }
+      }
+      tourPaintings.current = paintings;
+      tourActive.current = true;
+      tourIndex.current = 0;
+      navigateToTourIndex(0);
+    };
+    const onStopTour = () => {
+      tourActive.current = false;
+      isNavigating.current = false;
+      navTarget.current = null;
+    };
+
+    window.addEventListener('paintingsReady', onPaintingsReady);
+    window.addEventListener('startGuidedTour', onStartTour);
+    window.addEventListener('stopGuidedTour', onStopTour);
+    return () => {
+      window.removeEventListener('paintingsReady', onPaintingsReady);
+      window.removeEventListener('startGuidedTour', onStartTour);
+      window.removeEventListener('stopGuidedTour', onStopTour);
+    };
+  }, [navigateToTourIndex]);
 
   // Collision detection: cast multiple rays at different heights
   const checkCollision = (position: Vector3, moveDir: Vector3): { blocked: boolean; normal?: Vector3 } => {
@@ -216,6 +344,53 @@ export default function CameraController() {
 
   // Frame loop
   useFrame((_, delta) => {
+    // Dancing camera animation
+    if (isDancing.current) {
+      danceTime.current += delta;
+      const t = danceTime.current;
+      // Head bob: mix of frequencies for a groovy feel
+      const yaw = Math.sin(t * 2.5) * 0.08 + Math.sin(t * 5) * 0.03;
+      const pitch = Math.sin(t * 3.3) * 0.05 + Math.cos(t * 1.7) * 0.03;
+      const roll = Math.sin(t * 2) * 0.04;
+      euler.current.y += yaw * delta * 8;
+      euler.current.x = pitch;
+      camera.quaternion.setFromEuler(new Euler(euler.current.x, euler.current.y, roll, 'YXZ'));
+      return;
+    }
+
+    // Guided tour: pause between paintings
+    if (tourActive.current && !isNavigating.current && tourPauseUntil.current > 0) {
+      if (Date.now() >= tourPauseUntil.current) {
+        tourPauseUntil.current = 0;
+        const prevIdx = tourIndex.current;
+        tourIndex.current++;
+        if (tourIndex.current < tourPaintings.current.length) {
+          const prevP = tourPaintings.current[prevIdx];
+          const nextP = tourPaintings.current[tourIndex.current];
+          // Detect wall change: compare normal directions
+          const sameWall =
+            Math.abs(prevP.normal[0] - nextP.normal[0]) < 0.1 &&
+            Math.abs(prevP.normal[2] - nextP.normal[2]) < 0.1;
+          if (!sameWall) {
+            // Route through room center before approaching next wall
+            const midZ = (prevP.center[2] + nextP.center[2]) / 2;
+            const targetPos = new Vector3(0, HUMAN_HEIGHT, midZ);
+            const lookAt = new Vector3(nextP.center[0], HUMAN_HEIGHT, nextP.center[2]);
+            navTarget.current = { pos: targetPos, lookAt };
+            isNavigating.current = true;
+            tourPhase.current = 'center';
+          } else {
+            navigateToTourIndex(tourIndex.current);
+          }
+        } else {
+          // Tour finished
+          tourActive.current = false;
+          window.dispatchEvent(new Event('guidedTourEnd'));
+        }
+      }
+      return;
+    }
+
     // Auto-navigation to painting
     if (isNavigating.current && navTarget.current) {
       // Cancel navigation on any user input
@@ -227,6 +402,10 @@ export default function CameraController() {
       if (hasInput) {
         isNavigating.current = false;
         navTarget.current = null;
+        if (tourActive.current) {
+          tourActive.current = false;
+          window.dispatchEvent(new Event('guidedTourEnd'));
+        }
       } else {
         const target = navTarget.current;
         const lerpSpeed = 3 * delta;
@@ -252,6 +431,17 @@ export default function CameraController() {
         if (dist < 0.05 && Math.abs(yawDiff) < 0.02) {
           isNavigating.current = false;
           navTarget.current = null;
+          // Tour: center → approach → stepback → pause
+          if (tourActive.current) {
+            if (tourPhase.current === 'center') {
+              navigateToTourIndex(tourIndex.current);
+            } else if (tourPhase.current === 'approach') {
+              stepBackFromPainting();
+            } else {
+              tourPauseUntil.current = Date.now() + 3000;
+              tourPhase.current = 'pause';
+            }
+          }
         }
 
         camera.position.y = HUMAN_HEIGHT;

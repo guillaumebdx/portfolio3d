@@ -126,6 +126,12 @@ export default function Museum({ modelPath }: MuseumProps) {
     // Small delay to let textures start rendering
     setTimeout(() => {
       window.dispatchEvent(new Event('sceneReady'));
+      // Broadcast painting positions for guided tour
+      window.dispatchEvent(
+        new CustomEvent('paintingsReady', {
+          detail: found.map((p) => ({ center: p.center, normal: p.normal })),
+        })
+      );
     }, 500);
   }, [scene]);
 

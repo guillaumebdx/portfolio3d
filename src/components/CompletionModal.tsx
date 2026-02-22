@@ -9,18 +9,24 @@ export default function CompletionModal() {
       setShow(true);
       // Trigger fade-in after mount
       requestAnimationFrame(() => setFadeIn(true));
+      window.dispatchEvent(new Event('dancingStart'));
     };
 
     window.addEventListener('allPaintingsVisited', onComplete);
     return () => window.removeEventListener('allPaintingsVisited', onComplete);
   }, []);
 
+  const handleClose = () => {
+    setShow(false);
+    window.dispatchEvent(new Event('dancingStop'));
+  };
+
   if (!show) return null;
 
   return (
     <div className={`completion-overlay ${fadeIn ? 'visible' : ''}`}>
       <div className="completion-modal">
-        <button className="completion-close" onClick={() => setShow(false)}>
+        <button className="completion-close" onClick={handleClose}>
           ✕
         </button>
 
