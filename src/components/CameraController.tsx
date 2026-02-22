@@ -18,6 +18,8 @@ export default function CameraController() {
   const isMobile = useRef(false);
   const moveForward = useRef(false);
   const moveBackward = useRef(false);
+  const strafeLeft = useRef(false);
+  const strafeRight = useRef(false);
 
   const keys = useRef({
     forward: false,
@@ -137,6 +139,10 @@ export default function CameraController() {
     const onWalkEnd = () => { moveForward.current = false; };
     const onWalkBackStart = () => { moveBackward.current = true; };
     const onWalkBackEnd = () => { moveBackward.current = false; };
+    const onStrafeLeftStart = () => { strafeLeft.current = true; };
+    const onStrafeLeftEnd = () => { strafeLeft.current = false; };
+    const onStrafeRightStart = () => { strafeRight.current = true; };
+    const onStrafeRightEnd = () => { strafeRight.current = false; };
 
     canvas.addEventListener('touchstart', onTouchStart, { passive: false });
     canvas.addEventListener('touchmove', onTouchMove, { passive: false });
@@ -146,6 +152,10 @@ export default function CameraController() {
     window.addEventListener('walkEnd', onWalkEnd);
     window.addEventListener('walkBackStart', onWalkBackStart);
     window.addEventListener('walkBackEnd', onWalkBackEnd);
+    window.addEventListener('strafeLeftStart', onStrafeLeftStart);
+    window.addEventListener('strafeLeftEnd', onStrafeLeftEnd);
+    window.addEventListener('strafeRightStart', onStrafeRightStart);
+    window.addEventListener('strafeRightEnd', onStrafeRightEnd);
 
     return () => {
       canvas.removeEventListener('touchstart', onTouchStart);
@@ -155,6 +165,10 @@ export default function CameraController() {
       window.removeEventListener('walkEnd', onWalkEnd);
       window.removeEventListener('walkBackStart', onWalkBackStart);
       window.removeEventListener('walkBackEnd', onWalkBackEnd);
+      window.removeEventListener('strafeLeftStart', onStrafeLeftStart);
+      window.removeEventListener('strafeLeftEnd', onStrafeLeftEnd);
+      window.removeEventListener('strafeRightStart', onStrafeRightStart);
+      window.removeEventListener('strafeRightEnd', onStrafeRightEnd);
     };
   }, [camera, gl]);
 
@@ -208,7 +222,8 @@ export default function CameraController() {
       const hasInput =
         keys.current.forward || keys.current.backward ||
         keys.current.left || keys.current.right ||
-        moveForward.current || moveBackward.current;
+        moveForward.current || moveBackward.current ||
+        strafeLeft.current || strafeRight.current;
       if (hasInput) {
         isNavigating.current = false;
         navTarget.current = null;
@@ -260,8 +275,8 @@ export default function CameraController() {
 
     if (keys.current.forward || moveForward.current) moveDir.add(direction.current);
     if (keys.current.backward || moveBackward.current) moveDir.sub(direction.current);
-    if (keys.current.left) moveDir.sub(right);
-    if (keys.current.right) moveDir.add(right);
+    if (keys.current.left || strafeLeft.current) moveDir.sub(right);
+    if (keys.current.right || strafeRight.current) moveDir.add(right);
 
     if (moveDir.lengthSq() > 0) {
       moveDir.normalize();

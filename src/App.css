@@ -127,23 +127,27 @@
 .walk-btns {
   pointer-events: auto;
   position: absolute;
-  bottom: 2rem;
-  right: 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  display: grid;
+  grid-template-columns: 50px 50px 50px;
+  grid-template-rows: 50px 50px;
+  gap: 6px;
+  grid-template-areas:
+    ". up ."
+    "left down right";
 }
 
 .walk-btn {
   pointer-events: auto;
-  width: 60px;
-  height: 60px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.4);
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(4px);
   color: #fff;
-  font-size: 1.4rem;
+  font-size: 1.2rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -157,10 +161,10 @@
   border-color: rgba(255, 255, 255, 0.7);
 }
 
-.walk-btn-back {
-  font-size: 1.2rem;
-  opacity: 0.7;
-}
+.walk-btn-up { grid-area: up; }
+.walk-btn-down { grid-area: down; }
+.walk-btn-left { grid-area: left; font-size: 1rem; }
+.walk-btn-right { grid-area: right; font-size: 1rem; }
 
 /* Completion Modal */
 .completion-overlay {

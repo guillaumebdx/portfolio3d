@@ -31,13 +31,29 @@ export default function Overlay({
     window.dispatchEvent(new Event('walkBackEnd'));
   }, []);
 
+  const onStrafeLeftStart = useCallback(() => {
+    window.dispatchEvent(new Event('strafeLeftStart'));
+  }, []);
+
+  const onStrafeLeftEnd = useCallback(() => {
+    window.dispatchEvent(new Event('strafeLeftEnd'));
+  }, []);
+
+  const onStrafeRightStart = useCallback(() => {
+    window.dispatchEvent(new Event('strafeRightStart'));
+  }, []);
+
+  const onStrafeRightEnd = useCallback(() => {
+    window.dispatchEvent(new Event('strafeRightEnd'));
+  }, []);
+
   return (
     <div className="overlay">
       {!isMobile && (
         <div className="hint">Cliquer pour entrer — ZQSD / WASD pour se déplacer</div>
       )}
       {isMobile && (
-        <div className="hint">Glisser pour regarder</div>
+        <div className="hint">Glisser pour regarder — Toucher un tableau pour s'en approcher</div>
       )}
 
       <div className="overlay-title">
@@ -48,7 +64,7 @@ export default function Overlay({
       {isMobile && (
         <div className="walk-btns">
           <button
-            className="walk-btn"
+            className="walk-btn walk-btn-up"
             onTouchStart={onWalkStart}
             onTouchEnd={onWalkEnd}
             onContextMenu={(e) => e.preventDefault()}
@@ -56,7 +72,23 @@ export default function Overlay({
             ▲
           </button>
           <button
-            className="walk-btn walk-btn-back"
+            className="walk-btn walk-btn-left"
+            onTouchStart={onStrafeLeftStart}
+            onTouchEnd={onStrafeLeftEnd}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            ◀
+          </button>
+          <button
+            className="walk-btn walk-btn-right"
+            onTouchStart={onStrafeRightStart}
+            onTouchEnd={onStrafeRightEnd}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            ▶
+          </button>
+          <button
+            className="walk-btn walk-btn-down"
             onTouchStart={onWalkBackStart}
             onTouchEnd={onWalkBackEnd}
             onContextMenu={(e) => e.preventDefault()}
