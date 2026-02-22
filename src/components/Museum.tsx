@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { useGLTF } from '@react-three/drei';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useGLTF, Text } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
 import {
   Group,
   Mesh,
@@ -8,13 +9,30 @@ import {
   Vector3,
   SpotLight,
   Object3D,
+  Color,
+  TextureLoader,
+  SRGBColorSpace,
 } from 'three';
+import paintingsData from '../data/paintings.json';
 
 const DRACO_CDN = 'https://www.gstatic.com/draco/versioned/decoders/1.5.7/';
 
-interface PaintingData {
+// Vite glob import: all images in assets/paints/
+const paintImages = import.meta.glob('../assets/paints/*.*', { eager: true, import: 'default' }) as Record<string, string>;
+
+function getImageUrl(filename: string): string | undefined {
+  const key = Object.keys(paintImages).find((k) => k.endsWith('/' + filename));
+  return key ? paintImages[key] : undefined;
+}
+
+interface PaintingInfo {
   center: [number, number, number];
-  wallSide: 'left' | 'right';
+  normal: [number, number, number];
+  bottomY: number;
+  width: number;
+  height: number;
+  title: string;
+  year: string;
 }
 
 interface MuseumProps {
@@ -24,15 +42,16 @@ interface MuseumProps {
 export default function Museum({ modelPath }: MuseumProps) {
   const { scene } = useGLTF(modelPath, DRACO_CDN);
   const groupRef = useRef<Group>(null);
-  const [paintings, setPaintings] = useState<PaintingData[]>([]);
+  const [paintings, setPaintings] = useState<PaintingInfo[]>([]);
 
   useEffect(() => {
     if (!groupRef.current) return;
 
-    // Force world matrix update so getWorldPosition is accurate
     groupRef.current.updateMatrixWorld(true);
 
-    const found: PaintingData[] = [];
+    const found: PaintingInfo[] = [];
+    const textureLoader = new TextureLoader();
+    let paintingIndex = 0;
 
     groupRef.current.traverse((child) => {
       if (!(child as Mesh).isMesh) return;
@@ -40,36 +59,92 @@ export default function Museum({ modelPath }: MuseumProps) {
       mesh.castShadow = true;
       mesh.receiveShadow = true;
 
-      // Detect paintings: meshes with a texture map
       const mat = mesh.material as MeshStandardMaterial;
-      if (!mat?.map) return;
+      if (!mat?.map) {
+        if (mat && mat.color) {
+          mat.color = new Color('#555555');
+          mat.roughness = 0.95;
+          mat.metalness = 0.0;
+        }
+        return;
+      }
 
-      // Get world-space bounding box (includes parent scale)
       const box = new Box3().setFromObject(mesh);
       const size = new Vector3();
       box.getSize(size);
       const center = new Vector3();
       box.getCenter(center);
 
-      // Paintings are flat: one dimension is very thin compared to the others
       const dims = [size.x, size.y, size.z].sort((a, b) => a - b);
       const isFlatish = dims[0] < dims[2] * 0.15;
-
-      // Paintings are on walls, not on the floor/ceiling (center Y roughly between 0.5 and 3.5)
       const isOnWall = center.y > 0.5 && center.y < 3.5;
 
       if (isFlatish && isOnWall) {
-        const wallSide: 'left' | 'right' = center.x < 0 ? 'left' : 'right';
+        // Replace texture from data
+        const data = paintingsData[paintingIndex];
+        if (data) {
+          const imgUrl = getImageUrl(data.file);
+          if (imgUrl) {
+            const tex = textureLoader.load(imgUrl);
+            tex.colorSpace = SRGBColorSpace;
+            tex.flipY = false;
+            mat.map = tex;
+            mat.needsUpdate = true;
+          }
+        }
+
+        const thinAxis = size.x < size.z ? 'x' : 'z';
+        let normal: [number, number, number];
+
+        if (thinAxis === 'x') {
+          normal = center.x < 0 ? [1, 0, 0] : [-1, 0, 0];
+        } else {
+          normal = center.z < 0 ? [0, 0, 1] : [0, 0, -1];
+        }
+
+        // Get painting dimensions (width is the larger horizontal axis)
+        const w = thinAxis === 'x' ? size.z : size.x;
+        const h = size.y;
+
         found.push({
           center: [center.x, center.y, center.z],
-          wallSide,
+          normal,
+          bottomY: box.min.y,
+          width: w,
+          height: h,
+          title: data?.title ?? `Œuvre #${paintingIndex + 1}`,
+          year: data?.year ?? '',
         });
+
+        paintingIndex++;
       }
     });
 
-    console.log(`Found ${found.length} paintings:`, found);
     setPaintings(found);
   }, [scene]);
+
+  const [visited, setVisited] = useState<Set<number>>(new Set());
+  const firedRef = useRef(false);
+
+  // Fire event when all paintings visited
+  useEffect(() => {
+    if (paintings.length > 0 && visited.size === paintings.length && !firedRef.current) {
+      firedRef.current = true;
+      // Small delay so the last green check renders first
+      setTimeout(() => {
+        window.dispatchEvent(new Event('allPaintingsVisited'));
+      }, 800);
+    }
+  }, [visited, paintings]);
+
+  const markVisited = useCallback((index: number) => {
+    setVisited((prev) => {
+      if (prev.has(index)) return prev;
+      const next = new Set(prev);
+      next.add(index);
+      return next;
+    });
+  }, []);
 
   return (
     <group ref={groupRef}>
@@ -79,23 +154,118 @@ export default function Museum({ modelPath }: MuseumProps) {
         position={[0, 0, 0]}
       />
       {paintings.map((p, i) => (
-        <PaintingSpotlight key={i} painting={p} />
+        <PaintingExtras
+          key={i}
+          index={i}
+          painting={p}
+          visited={visited.has(i)}
+          onVisited={markVisited}
+        />
       ))}
     </group>
   );
 }
 
+const VISIT_DISTANCE = 2.5;
+const _camDir = new Vector3();
+
+function PaintingExtras({
+  index,
+  painting,
+  visited,
+  onVisited,
+}: {
+  index: number;
+  painting: PaintingInfo;
+  visited: boolean;
+  onVisited: (i: number) => void;
+}) {
+  useFrame(({ camera }) => {
+    if (visited) return;
+    const dx = camera.position.x - painting.center[0];
+    const dz = camera.position.z - painting.center[2];
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist > VISIT_DISTANCE) return;
+
+    // Check if camera is facing the painting (looking toward the wall)
+    camera.getWorldDirection(_camDir);
+    const n = painting.normal;
+    // dot between camera look direction and inverse of painting normal
+    // (camera should look opposite to the normal = toward the wall)
+    const dot = _camDir.x * -n[0] + _camDir.z * -n[2];
+    if (dot > 0.3) {
+      onVisited(index);
+    }
+  });
+
+  return (
+    <>
+      <PaintingFrame painting={painting} />
+      <PaintingSpotlight painting={painting} />
+      <PaintingPlacard painting={painting} visited={visited} />
+    </>
+  );
+}
+
+// 3D frame around the painting (positioned behind the painting texture)
+function PaintingFrame({ painting }: { painting: PaintingInfo }) {
+  const { center, normal, width, height } = painting;
+
+  // Frame position: at painting center, slightly behind (negative normal)
+  const framePos: [number, number, number] = [
+    center[0] - normal[0] * 0.01,
+    center[1],
+    center[2] - normal[2] * 0.01,
+  ];
+
+  // Rotation to face outward (same as placard)
+  const rotY = Math.atan2(normal[0], normal[2]);
+
+  // Frame dimensions
+  const frameDepth = 0.04;
+  const innerBorderWidth = 0.03;
+  const outerBorderWidth = 0.05;
+
+  return (
+    <group position={framePos} rotation={[0, rotY, 0]}>
+      {/* Outer frame - warm brown wood (furthest back) */}
+      <mesh position={[0, 0, -frameDepth]}>
+        <boxGeometry args={[width + outerBorderWidth * 2, height + outerBorderWidth * 2, frameDepth]} />
+        <meshStandardMaterial color="#3d2b1f" roughness={0.6} metalness={0.2} />
+      </mesh>
+
+      {/* Inner frame - gold/brass accent */}
+      <mesh position={[0, 0, -frameDepth * 0.6]}>
+        <boxGeometry args={[width + innerBorderWidth * 2, height + innerBorderWidth * 2, frameDepth * 0.8]} />
+        <meshStandardMaterial color="#c9a227" roughness={0.3} metalness={0.7} />
+      </mesh>
+
+      {/* Inner lip - dark edge closest to painting */}
+      <mesh position={[0, 0, -0.005]}>
+        <boxGeometry args={[width + 0.015, height + 0.015, 0.01]} />
+        <meshStandardMaterial color="#2a2a2a" roughness={0.2} metalness={0.5} />
+      </mesh>
+    </group>
+  );
+}
+
 // Spot positioned above the painting, pointing down at its center
-function PaintingSpotlight({ painting }: { painting: PaintingData }) {
+function PaintingSpotlight({ painting }: { painting: PaintingInfo }) {
   const lightRef = useRef<SpotLight>(null);
   const targetRef = useRef<Object3D>(null);
 
-  const { center } = painting;
+  const { center, normal, width } = painting;
 
-  // Spot origin: slightly in front of the painting (toward room center), up at ceiling
-  const offsetX = painting.wallSide === 'left' ? 0.8 : -0.8;
-  const spotPos: [number, number, number] = [center[0] + offsetX, center[1] + 2, center[2]];
+  const spotPos: [number, number, number] = [
+    center[0] + normal[0] * 0.8,
+    center[1] + 2,
+    center[2] + normal[2] * 0.8,
+  ];
   const targetPos: [number, number, number] = [center[0], center[1], center[2]];
+
+  // Wider paintings need wider spotlight angle
+  // Base angle 0.5 for small paintings, up to 0.9 for large ones
+  const spotAngle = Math.min(0.9, 0.4 + width * 0.25);
 
   useEffect(() => {
     if (lightRef.current && targetRef.current) {
@@ -108,15 +278,116 @@ function PaintingSpotlight({ painting }: { painting: PaintingData }) {
       <spotLight
         ref={lightRef}
         position={spotPos}
-        angle={0.5}
-        penumbra={0.5}
-        intensity={5}
-        color="#fff0d6"
-        distance={6}
-        decay={1.5}
+        angle={spotAngle}
+        penumbra={0.4}
+        intensity={8}
+        color="#ffdda0"
+        distance={8}
+        decay={1.2}
         castShadow={false}
       />
       <object3D ref={targetRef} position={targetPos} />
     </>
+  );
+}
+
+// Placard under the painting with title + year + visited check
+function PaintingPlacard({ painting, visited }: { painting: PaintingInfo; visited: boolean }) {
+  const { center, normal, bottomY, title, year } = painting;
+
+  // Position: below the painting, pushed out from wall
+  const placardPos: [number, number, number] = [
+    center[0] + normal[0] * 0.05,
+    bottomY - 0.25,
+    center[2] + normal[2] * 0.05,
+  ];
+
+  // Rotation: face the normal direction
+  const rotY = Math.atan2(normal[0], normal[2]);
+
+  return (
+    <group position={placardPos} rotation={[0, rotY, 0]}>
+      {/* Main dark panel — 3D box for depth */}
+      <mesh position={[0, 0, 0.005]}>
+        <boxGeometry args={[0.32, 0.1, 0.01]} />
+        <meshStandardMaterial color="#111111" roughness={0.2} metalness={0.9} />
+      </mesh>
+
+      {/* Gold border frame */}
+      <mesh position={[0, 0, 0.004]}>
+        <boxGeometry args={[0.34, 0.12, 0.005]} />
+        <meshStandardMaterial color="#8b7355" roughness={0.3} metalness={0.7} />
+      </mesh>
+
+      {/* Title text */}
+      <Text
+        position={[0, 0.015, 0.015]}
+        fontSize={0.028}
+        color="#e0d0b8"
+        anchorX="center"
+        anchorY="middle"
+        font="/fonts/Inter-Regular.woff"
+        letterSpacing={0.05}
+      >
+        {title}
+      </Text>
+
+      {/* Year text */}
+      <Text
+        position={[0, -0.022, 0.015]}
+        fontSize={0.018}
+        color="#8a8078"
+        anchorX="center"
+        anchorY="middle"
+        font="/fonts/Inter-Regular.woff"
+        letterSpacing={0.08}
+      >
+        {year}
+      </Text>
+
+      {/* Status dot: red when not visited, green when visited */}
+      <group position={[0.24, 0, 0.01]}>
+        {/* Outer glow disc */}
+        <mesh>
+          <circleGeometry args={[0.04, 24]} />
+          <meshStandardMaterial
+            color={visited ? '#00ff66' : '#ff4444'}
+            emissive={visited ? '#00ff66' : '#ff4444'}
+            emissiveIntensity={1.5}
+            transparent
+            opacity={0.15}
+          />
+        </mesh>
+        {/* Inner bright disc */}
+        <mesh position={[0, 0, 0.002]}>
+          <circleGeometry args={[0.025, 24]} />
+          <meshStandardMaterial
+            color={visited ? '#00ff66' : '#ff4444'}
+            emissive={visited ? '#00ff66' : '#ff4444'}
+            emissiveIntensity={2}
+            transparent
+            opacity={0.4}
+          />
+        </mesh>
+        {/* Check or X symbol */}
+        <Text
+          position={[0, 0, 0.005]}
+          fontSize={0.04}
+          color={visited ? '#00ff66' : '#ff4444'}
+          anchorX="center"
+          anchorY="middle"
+        >
+          {visited ? '✓' : '○'}
+        </Text>
+        {/* Point light for glow */}
+        <pointLight
+          position={[0, 0, 0.03]}
+          intensity={0.4}
+          color={visited ? '#00ff66' : '#ff4444'}
+          distance={0.4}
+          decay={2}
+        />
+      </group>
+    </group>
   );
 }

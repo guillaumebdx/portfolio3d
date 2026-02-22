@@ -17,6 +17,7 @@ export default function CameraController() {
   const isLocked = useRef(false);
   const isMobile = useRef(false);
   const moveForward = useRef(false);
+  const moveBackward = useRef(false);
 
   const keys = useRef({
     forward: false,
@@ -34,8 +35,8 @@ export default function CameraController() {
 
   // Set initial camera
   useEffect(() => {
-    camera.position.set(0, HUMAN_HEIGHT, 5);
-    camera.lookAt(0, HUMAN_HEIGHT, 0);
+    camera.position.set(1, HUMAN_HEIGHT, 2);
+    camera.lookAt(0, HUMAN_HEIGHT, -10);
     euler.current.setFromQuaternion(camera.quaternion);
   }, [camera]);
 
@@ -130,6 +131,8 @@ export default function CameraController() {
     // Walk button events (from DOM overlay)
     const onWalkStart = () => { moveForward.current = true; };
     const onWalkEnd = () => { moveForward.current = false; };
+    const onWalkBackStart = () => { moveBackward.current = true; };
+    const onWalkBackEnd = () => { moveBackward.current = false; };
 
     canvas.addEventListener('touchstart', onTouchStart, { passive: false });
     canvas.addEventListener('touchmove', onTouchMove, { passive: false });
@@ -137,6 +140,8 @@ export default function CameraController() {
 
     window.addEventListener('walkStart', onWalkStart);
     window.addEventListener('walkEnd', onWalkEnd);
+    window.addEventListener('walkBackStart', onWalkBackStart);
+    window.addEventListener('walkBackEnd', onWalkBackEnd);
 
     return () => {
       canvas.removeEventListener('touchstart', onTouchStart);
@@ -144,6 +149,8 @@ export default function CameraController() {
       canvas.removeEventListener('touchend', onTouchEnd);
       window.removeEventListener('walkStart', onWalkStart);
       window.removeEventListener('walkEnd', onWalkEnd);
+      window.removeEventListener('walkBackStart', onWalkBackStart);
+      window.removeEventListener('walkBackEnd', onWalkBackEnd);
     };
   }, [camera, gl]);
 
@@ -187,7 +194,7 @@ export default function CameraController() {
     const moveDir = new Vector3();
 
     if (keys.current.forward || moveForward.current) moveDir.add(direction.current);
-    if (keys.current.backward) moveDir.sub(direction.current);
+    if (keys.current.backward || moveBackward.current) moveDir.sub(direction.current);
     if (keys.current.left) moveDir.sub(right);
     if (keys.current.right) moveDir.add(right);
 

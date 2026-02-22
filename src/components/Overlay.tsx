@@ -23,6 +23,14 @@ export default function Overlay({
     window.dispatchEvent(new Event('walkEnd'));
   }, []);
 
+  const onWalkBackStart = useCallback(() => {
+    window.dispatchEvent(new Event('walkBackStart'));
+  }, []);
+
+  const onWalkBackEnd = useCallback(() => {
+    window.dispatchEvent(new Event('walkBackEnd'));
+  }, []);
+
   return (
     <div className="overlay">
       {!isMobile && (
@@ -38,14 +46,24 @@ export default function Overlay({
       </div>
 
       {isMobile && (
-        <button
-          className="walk-btn"
-          onTouchStart={onWalkStart}
-          onTouchEnd={onWalkEnd}
-          onContextMenu={(e) => e.preventDefault()}
-        >
-          ▲
-        </button>
+        <div className="walk-btns">
+          <button
+            className="walk-btn"
+            onTouchStart={onWalkStart}
+            onTouchEnd={onWalkEnd}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            ▲
+          </button>
+          <button
+            className="walk-btn walk-btn-back"
+            onTouchStart={onWalkBackStart}
+            onTouchEnd={onWalkBackEnd}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            ▼
+          </button>
+        </div>
       )}
     </div>
   );
