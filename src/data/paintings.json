@@ -1,14 +1,14 @@
 [
-  { "file": "boby.png", "title": "Boby - CTO", "year": "2021" },
-  { "file": "sauvrobot.png", "title": "Sauvegarde Robot", "year": "2021" },
-  { "file": "kortex.png", "title": "Kortex", "year": "2018" },
-  { "file": "projects.png", "title": "Projets - Lead dev", "year": "2018 - 2021" },
-  { "file": "wordle.png", "title": "WordleMonde", "year": "2020" },
-  { "file": "edgy.png", "title": "Edgy", "year": "2025" },
-  { "file": "rlp.png", "title": "RL Playground", "year": "2026" },
-  { "file": "tesla.png", "title": "Light Studio For Tesla", "year": "2026" },
-  { "file": "laurie.png", "title": "laurieperet.fr", "year": "2022" },
-  { "file": "gelcom.png", "title": "Gelcom.fr", "year": "2017" },
-  { "file": "roboadvisor.png", "title": "RoboAdvisor", "year": "2014" },
-  { "file": "Mona.png", "title": "CRM - Cours de langues", "year": "2007" }
+  { "file": "boby.webp", "title": "Boby - CTO", "year": "2021" },
+  { "file": "sauvrobot.webp", "title": "Sauvegarde Robot", "year": "2021" },
+  { "file": "kortex.webp", "title": "Kortex", "year": "2018" },
+  { "file": "projects.webp", "title": "Projets - Lead dev", "year": "2018 - 2021" },
+  { "file": "wordle.webp", "title": "WordleMonde", "year": "2020" },
+  { "file": "edgy.webp", "title": "Edgy", "year": "2025" },
+  { "file": "rlp.webp", "title": "RL Playground", "year": "2026" },
+  { "file": "tesla.webp", "title": "Light Studio For Tesla", "year": "2026" },
+  { "file": "laurie.webp", "title": "laurieperet.fr", "year": "2022" },
+  { "file": "gelcom.webp", "title": "Gelcom.fr", "year": "2017" },
+  { "file": "roboadvisor.webp", "title": "RoboAdvisor", "year": "2014" },
+  { "file": "Mona.webp", "title": "CRM - Cours de langues", "year": "2007" }
 ]
